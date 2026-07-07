@@ -1,6 +1,7 @@
 --[[
-    Plalette MM2 Ultimate - Clean & Optimized
-    All features properly implemented
+    Plalette MM2 Ultimate Script
+    Credits: Plalette
+    Final Version - All Features Optimized
 ]]
 
 local Players = game:GetService("Players")
@@ -11,7 +12,8 @@ local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-local TweenService = game:GetService("TweenService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -19,7 +21,6 @@ local Mouse = LocalPlayer:GetMouse()
 
 -- Settings
 local Settings = {
-    SilentAim = false,
     RightClickAimbot = false,
     HitboxExpander = false,
     HitboxSize = 3,
@@ -38,18 +39,21 @@ local Settings = {
     TeleportKiller = false,
     AutoFarm = false,
     AutoPickup = false,
-    EmoteUnlocker = false,
-    SelectedEmote = "Dab",
-    AutoEmote = false,
     Fullbright = false,
-    FogRemover = false
+    FogRemover = false,
+    GodMode = false,
+    KillAll = false,
+    AntiGrab = false,
+    FlingPlayer = false,
+    FlingTarget = nil,
+    FlingSheriff = false,
+    FlingMurderer = false,
+    FlingPower = 1000
 }
 
--- Connections & Drawings
 local Connections = {}
 local ESPDrawings = {}
 
--- Cleanup
 local function ClearDrawings()
     for _, d in pairs(ESPDrawings) do
         pcall(function() d:Remove() end)
@@ -64,7 +68,6 @@ local function DisconnectAll()
     Connections = {}
 end
 
--- Get Murderer
 local function GetMurderer()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
@@ -75,7 +78,6 @@ local function GetMurderer()
     return nil
 end
 
--- Get Sheriff
 local function GetSheriff()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
@@ -86,6 +88,27 @@ local function GetSheriff()
     return nil
 end
 
+local function GetPlayerList()
+    local list = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(list, p.Name)
+        end
+    end
+    return list
+end
+
+local function FlingPlayer(target, power)
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = target.Character.HumanoidRootPart
+        local bv = Instance.new("BodyVelocity")
+        bv.Velocity = Vector3.new(math.random(-power, power), power, math.random(-power, power))
+        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bv.Parent = hrp
+        game:GetService("Debris"):AddItem(bv, 0.5)
+    end
+end
+
 -- ==================== GUI ====================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PlaletteMM2"
@@ -94,9 +117,9 @@ ScreenGui.Parent = CoreGui
 
 -- Main Frame
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 560, 0, 400)
-MainFrame.Position = UDim2.new(0.5, -280, 0.5, -200)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+MainFrame.Size = UDim2.new(0, 580, 0, 430)
+MainFrame.Position = UDim2.new(0.5, -290, 0.5, -215)
+MainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -104,7 +127,7 @@ MainFrame.Visible = true
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
 
--- Border glow
+-- Border
 local Border = Instance.new("Frame")
 Border.Size = UDim2.new(1, 4, 1, 4)
 Border.Position = UDim2.new(0, -2, 0, -2)
@@ -113,11 +136,11 @@ Border.BorderSizePixel = 0
 Border.Parent = MainFrame
 Instance.new("UICorner", Border).CornerRadius = UDim.new(0, 11)
 
--- Minimized square
+-- Minimized Square
 local MiniFrame = Instance.new("Frame")
-MiniFrame.Size = UDim2.new(0, 140, 0, 40)
-MiniFrame.Position = UDim2.new(0.5, -70, 0.02, 0)
-MiniFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+MiniFrame.Size = UDim2.new(0, 200, 0, 40)
+MiniFrame.Position = UDim2.new(0.5, -100, 0.02, 0)
+MiniFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
 MiniFrame.BorderSizePixel = 0
 MiniFrame.Visible = false
 MiniFrame.Active = true
@@ -125,37 +148,26 @@ MiniFrame.Draggable = true
 MiniFrame.Parent = ScreenGui
 Instance.new("UICorner", MiniFrame).CornerRadius = UDim.new(0, 8)
 
-local MiniBorder = Instance.new("Frame")
-MiniBorder.Size = UDim2.new(1, 4, 1, 4)
-MiniBorder.Position = UDim2.new(0, -2, 0, -2)
-MiniBorder.BackgroundColor3 = Color3.fromRGB(130, 80, 255)
-MiniBorder.BorderSizePixel = 0
-MiniBorder.Parent = MiniFrame
-Instance.new("UICorner", MiniBorder).CornerRadius = UDim.new(0, 9)
-
 local MiniLabel = Instance.new("TextLabel")
 MiniLabel.Size = UDim2.new(1, 0, 1, 0)
 MiniLabel.BackgroundTransparency = 1
 MiniLabel.TextColor3 = Color3.fromRGB(180, 140, 255)
-MiniLabel.Text = "plalettescripts"
+MiniLabel.Text = "plalettescripts - Press CTRL"
 MiniLabel.Font = Enum.Font.SourceSansBold
-MiniLabel.TextSize = 16
+MiniLabel.TextSize = 13
 MiniLabel.Parent = MiniFrame
 
--- Glow animation
+-- Color animation for main frame border only
 task.spawn(function()
     local hue = 0
     while ScreenGui.Parent do
         hue = (hue + 0.004) % 1
-        local c = Color3.fromHSV(hue, 0.8, 1)
-        Border.BackgroundColor3 = c
-        MiniBorder.BackgroundColor3 = c
-        MiniLabel.TextColor3 = c
+        Border.BackgroundColor3 = Color3.fromHSV(hue, 0.8, 1)
         task.wait(0.03)
     end
 end)
 
--- Ctrl toggle
+-- Ctrl Toggle
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
@@ -164,10 +176,10 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Title
+-- Title Bar
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 40)
-TitleBar.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+TitleBar.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainFrame
 Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 10)
@@ -177,7 +189,7 @@ TitleLabel.Size = UDim2.new(0.6, 0, 1, 0)
 TitleLabel.Position = UDim2.new(0.02, 0, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.TextColor3 = Color3.fromRGB(180, 140, 255)
-TitleLabel.Text = "✦ Plalette MM2 ✦"
+TitleLabel.Text = "✦ Plalette MM2 Ultimate ✦"
 TitleLabel.Font = Enum.Font.SourceSansBold
 TitleLabel.TextSize = 20
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -199,9 +211,9 @@ CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
--- Tabs
+-- Tab System
 local TabContainer = Instance.new("Frame")
-TabContainer.Size = UDim2.new(0, 130, 1, -45)
+TabContainer.Size = UDim2.new(0, 135, 1, -45)
 TabContainer.Position = UDim2.new(0, 5, 0, 43)
 TabContainer.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
 TabContainer.BorderSizePixel = 0
@@ -215,8 +227,8 @@ TabList.SortOrder = Enum.SortOrder.LayoutOrder
 TabList.Parent = TabContainer
 
 local ContentFrame = Instance.new("Frame")
-ContentFrame.Size = UDim2.new(1, -142, 1, -48)
-ContentFrame.Position = UDim2.new(0, 138, 0, 43)
+ContentFrame.Size = UDim2.new(1, -147, 1, -48)
+ContentFrame.Position = UDim2.new(0, 143, 0, 43)
 ContentFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
 ContentFrame.BorderSizePixel = 0
 ContentFrame.Parent = MainFrame
@@ -242,7 +254,7 @@ local function CreateTab(name, icon)
     Content.BorderSizePixel = 0
     Content.ScrollBarThickness = 3
     Content.ScrollBarImageColor3 = Color3.fromRGB(130, 80, 255)
-    Content.CanvasSize = UDim2.new(0, 0, 0, 700)
+    Content.CanvasSize = UDim2.new(0, 0, 0, 900)
     Content.Visible = false
     Content.Parent = ContentFrame
 
@@ -267,7 +279,12 @@ local function CreateTab(name, icon)
         Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     end)
 
-    if #ContentFrame:GetChildren() == 0 then
+    local children = ContentFrame:GetChildren()
+    local hasVisible = false
+    for _, c in ipairs(children) do
+        if c:IsA("ScrollingFrame") and c.Visible then hasVisible = true end
+    end
+    if not hasVisible and #children <= 1 then
         Content.Visible = true
         Btn.BackgroundColor3 = Color3.fromRGB(130, 80, 255)
         Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -374,7 +391,7 @@ local function CreateTab(name, icon)
         DropBtn.Position = UDim2.new(0.5, 0, 0, 5)
         DropBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
         DropBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        DropBtn.Text = default
+        DropBtn.Text = tostring(default)
         DropBtn.Font = Enum.Font.SourceSans
         DropBtn.TextSize = 12
         DropBtn.Parent = Frame
@@ -414,89 +431,135 @@ local function CreateTab(name, icon)
         end)
     end
 
+    function tab:CreateButton(name, callback)
+        local Btn = Instance.new("TextButton")
+        Btn.Size = UDim2.new(1, -2, 0, 30)
+        Btn.BackgroundColor3 = Color3.fromRGB(130, 80, 255)
+        Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Btn.Text = name
+        Btn.Font = Enum.Font.SourceSansBold
+        Btn.TextSize = 13
+        Btn.Parent = Content
+        Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 5)
+        Btn.MouseButton1Click:Connect(callback)
+    end
+
     return tab
 end
 
 -- Create Tabs
 local CombatTab = CreateTab("Combat", "⚔")
-local ESPTab = CreateTab("ESP", "👁")
-local MoveTab = CreateTab("Move", "🏃")
-local FarmTab = CreateTab("Farm", "💰")
-local EmoteTab = CreateTab("Emotes", "🎭")
+local ESPTab = CreateTab("Visuals", "👁")
+local MoveTab = CreateTab("Movement", "🏃")
+local FarmTab = CreateTab("Farming", "💰")
+local FlingTab = CreateTab("Fling", "💨")
 local WorldTab = CreateTab("World", "🌍")
+local CreditsTab = CreateTab("Credits", "⭐")
 
--- Combat
-CombatTab:CreateToggle("Silent Aim", "SilentAim")
-CombatTab:CreateToggle("Right-Click Aimbot", "RightClickAimbot")
+-- Combat Tab
+CombatTab:CreateToggle("Right-Click Aimbot (Murderer)", "RightClickAimbot")
 CombatTab:CreateSlider("Hitbox Size", "HitboxSize", 1, 10, 3)
 CombatTab:CreateToggle("Hitbox Expander", "HitboxExpander")
 CombatTab:CreateToggle("Instant Reload", "InstantReload")
 CombatTab:CreateToggle("Triggerbot", "Triggerbot")
+CombatTab:CreateToggle("God Mode", "GodMode")
+CombatTab:CreateButton("Kill All", function()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Humanoid") then
+            p.Character.Humanoid.Health = 0
+        end
+    end
+end)
 
--- ESP
-ESPTab:CreateToggle("Player ESP (Red Outline)", "PlayerESP")
+-- ESP Tab
+ESPTab:CreateToggle("Player Outlines", "PlayerESP")
 ESPTab:CreateToggle("Coin ESP", "CoinESP")
 ESPTab:CreateToggle("Gun ESP", "GunESP")
 ESPTab:CreateToggle("Tracers", "Tracers")
 ESPTab:CreateToggle("Role Reveal", "RoleReveal")
 
--- Movement
-MoveTab:CreateSlider("Speed", "SpeedValue", 16, 100, 32)
+-- Movement Tab
+MoveTab:CreateSlider("Speed", "SpeedValue", 16, 150, 32)
 MoveTab:CreateToggle("Speed Hack", "SpeedHack")
 MoveTab:CreateToggle("NoClip", "NoClip")
 MoveTab:CreateToggle("Infinite Jump", "InfiniteJump")
 MoveTab:CreateToggle("Anti-AFK", "AntiAFK")
 MoveTab:CreateToggle("Teleport to Killer", "TeleportKiller")
 
--- Farm
+-- Farm Tab
 FarmTab:CreateToggle("Auto-Farm Coins", "AutoFarm")
 FarmTab:CreateToggle("Auto-Pickup Gun", "AutoPickup")
 
--- Emotes
-EmoteTab:CreateDropdown("Emote", {"Dab", "Floss", "Laugh", "Wave", "Point", "Salute", "ThumbsUp", "Boo", "Cheers", "Dance1", "Dance2", "Shrug", "Stretch"}, "SelectedEmote", "Dab")
-EmoteTab:CreateToggle("Emote Unlocker", "EmoteUnlocker")
-EmoteTab:CreateToggle("Auto-Emote (When Idle)", "AutoEmote")
+-- Fling Tab
+FlingTab:CreateDropdown("Select Player", GetPlayerList(), "FlingTarget", nil)
+FlingTab:CreateSlider("Fling Power", "FlingPower", 100, 10000, 1000)
+FlingTab:CreateToggle("Fling Selected Player", "FlingPlayer")
+FlingTab:CreateToggle("Fling Sheriff", "FlingSheriff")
+FlingTab:CreateToggle("Fling Murderer", "FlingMurderer")
+FlingTab:CreateToggle("Anti-Grab (Fling Attacker)", "AntiGrab")
 
--- World
+-- World Tab
 WorldTab:CreateToggle("Fullbright", "Fullbright")
 WorldTab:CreateToggle("Fog Remover", "FogRemover")
-
--- ==================== FEATURES ====================
-
--- Silent Aim (fixed - doesn't block shooting)
-task.spawn(function()
-    local oldNamecall
-    RunService.RenderStepped:Connect(function()
-        if Settings.SilentAim then
-            if not oldNamecall then
-                oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-                    local method = getnamecallmethod()
-                    local args = {...}
-                    if method == "FireServer" and (tostring(self) == "Shoot" or tostring(self) == "ShootGun") and LocalPlayer.Character then
-                        local target, closest = nil, math.huge
-                        for _, p in ipairs(Players:GetPlayers()) do
-                            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
-                                local pos, onScreen = Camera:WorldToScreenPoint(p.Character.Head.Position)
-                                local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                                if onScreen and dist < 300 and dist < closest then
-                                    closest = dist
-                                    target = p
-                                end
-                            end
-                        end
-                        if target then args[1] = target.Character.Head.Position end
-                    end
-                    return oldNamecall(self, unpack(args))
-                end)
+WorldTab:CreateButton("Server Hop", function()
+    local servers = {}
+    pcall(function()
+        local Http = game:GetService("HttpService")
+        local req = request({Url = "https://games.roblox.com/v1/games/142823291/servers/Public?limit=100"})
+        local data = Http:JSONDecode(req.Body)
+        for _, v in ipairs(data.data) do
+            if v.playing < v.maxPlayers and v.id ~= game.JobId then
+                table.insert(servers, v.id)
             end
-        else
-            if oldNamecall then
-                hookmetamethod(game, "__namecall", oldNamecall)
-                oldNamecall = nil
-            end
+        end
+        if #servers > 0 then
+            TeleportService:TeleportToPlaceInstance(142823291, servers[math.random(1, #servers)], LocalPlayer)
         end
     end)
 end)
+
+-- Credits Tab
+local CreditsFrame = CreditsTab.Content
+
+local CreditInfo = Instance.new("TextLabel")
+CreditInfo.Size = UDim2.new(1, -10, 0, 200)
+CreditInfo.Position = UDim2.new(0, 5, 0, 10)
+CreditInfo.BackgroundTransparency = 1
+CreditInfo.TextColor3 = Color3.fromRGB(220, 220, 240)
+CreditInfo.Text = [[
+╔══════════════════════╗
+     Plalette MM2 Ultimate
+╚══════════════════════╝
+
+👤 Created by: plalettescripts
+
+📜 Special Thanks:
+   • The MM2 Community
+   • Script Testers
+   • Everyone who supported
+
+🔧 Features:
+   • Right-Click Aimbot
+   • Player Outlines (Color Coded)
+   • Fling System
+   • ESP & Visuals
+   • Movement Hacks
+   • Auto Farm
+   • God Mode & More
+
+💾 GitHub:
+   plalettescripts/mm2script
+
+⚠️ Use at your own risk
+]]
+CreditInfo.Font = Enum.Font.SourceSans
+CreditInfo.TextSize = 12
+CreditInfo.TextXAlignment = Enum.TextXAlignment.Left
+CreditInfo.TextYAlignment = Enum.TextYAlignment.Top
+CreditInfo.RichText = true
+CreditInfo.Parent = CreditsFrame
+
+-- ==================== FEATURES ====================
 
 -- Right-Click Aimbot (Murderer only)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -527,7 +590,7 @@ task.spawn(function()
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     p.Character.HumanoidRootPart.Size = Vector3.new(Settings.HitboxSize, Settings.HitboxSize, Settings.HitboxSize)
-                    p.Character.HumanoidRootPart.Transparency = 0.6
+                    p.Character.HumanoidRootPart.Transparency = 0.5
                 end
             end
         end
@@ -556,9 +619,9 @@ end)
 -- Triggerbot
 task.spawn(function()
     while task.wait(0.05) do
-        if Settings.Triggerbot then
+        if Settings.Triggerbot and LocalPlayer.Character then
             pcall(function()
-                local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
                 if tool and tool:FindFirstChild("Shoot") then
                     local ray = Ray.new(Camera.CFrame.Position, Camera.CFrame.LookVector * 300)
                     local hit, pos = Workspace:FindPartOnRay(ray, LocalPlayer.Character)
@@ -571,55 +634,47 @@ task.spawn(function()
     end
 end)
 
--- Player ESP (Red outline filled, visible through walls)
+-- God Mode
 task.spawn(function()
-    while task.wait(0.03) do
-        ClearDrawings()
+    while task.wait(0.3) do
+        if Settings.GodMode and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.Health = LocalPlayer.Character.Humanoid.MaxHealth
+        end
+    end
+end)
+
+-- Player ESP (Color-coded outlines, not through walls)
+task.spawn(function()
+    while task.wait(0.5) do
         if Settings.PlayerESP then
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character then
-                    -- Red highlight through walls
-                    local highlight = p.Character:FindFirstChild("PlaletteESP")
+                    local highlight = p.Character:FindFirstChild("PlaletteOutline")
                     if not highlight then
                         highlight = Instance.new("Highlight")
-                        highlight.Name = "PlaletteESP"
-                        highlight.FillColor = Color3.fromRGB(255, 30, 30)
-                        highlight.FillTransparency = 0.5
-                        highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+                        highlight.Name = "PlaletteOutline"
+                        highlight.FillTransparency = 1
                         highlight.OutlineTransparency = 0
+                        highlight.DepthMode = Enum.HighlightDepthMode.Occluded
                         highlight.Parent = p.Character
                     end
-                    -- Text above head
-                    if p.Character:FindFirstChild("Head") then
-                        local pos, onScreen = Camera:WorldToScreenPoint(p.Character.Head.Position + Vector3.new(0, 1.5, 0))
-                        if onScreen then
-                            local txt = Drawing.new("Text")
-                            txt.Text = p.Name
-                            txt.Color = Color3.fromRGB(255, 50, 50)
-                            txt.Size = 14
-                            txt.Position = Vector2.new(pos.X, pos.Y)
-                            txt.Center = true
-                            txt.Visible = true
-                            table.insert(ESPDrawings, txt)
-
-                            local dist = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - p.Character.HumanoidRootPart.Position).Magnitude)
-                            local dtxt = Drawing.new("Text")
-                            dtxt.Text = dist .. "m"
-                            dtxt.Color = Color3.fromRGB(255, 180, 180)
-                            dtxt.Size = 11
-                            dtxt.Position = Vector2.new(pos.X, pos.Y + 15)
-                            dtxt.Center = true
-                            dtxt.Visible = true
-                            table.insert(ESPDrawings, dtxt)
-                        end
+                    
+                    local isMurderer = p.Backpack and p.Backpack:FindFirstChild("Knife") or p.Character:FindFirstChild("Knife")
+                    local isSheriff = p.Backpack and p.Backpack:FindFirstChild("Gun") or p.Character:FindFirstChild("Gun")
+                    
+                    if isMurderer then
+                        highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+                    elseif isSheriff then
+                        highlight.OutlineColor = Color3.fromRGB(0, 100, 255)
+                    else
+                        highlight.OutlineColor = Color3.fromRGB(0, 255, 0)
                     end
                 end
             end
         else
-            -- Remove highlights when ESP off
             for _, p in ipairs(Players:GetPlayers()) do
-                if p.Character and p.Character:FindFirstChild("PlaletteESP") then
-                    p.Character.PlaletteESP:Destroy()
+                if p.Character and p.Character:FindFirstChild("PlaletteOutline") then
+                    p.Character.PlaletteOutline:Destroy()
                 end
             end
         end
@@ -815,40 +870,50 @@ task.spawn(function()
     end
 end)
 
--- Emote Unlocker
+-- Fling Selected Player
 task.spawn(function()
-    while task.wait(4) do
-        if Settings.EmoteUnlocker then
-            pcall(function()
-                for _, remote in ipairs(ReplicatedStorage:GetDescendants()) do
-                    if remote:IsA("RemoteEvent") and string.find(string.lower(remote.Name), "emote") then
-                        remote:FireServer(Settings.SelectedEmote, true)
-                    end
+    while task.wait(0.3) do
+        if Settings.FlingPlayer and Settings.FlingTarget then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.Name == Settings.FlingTarget then
+                    FlingPlayer(p, Settings.FlingPower)
                 end
-            end)
+            end
         end
     end
 end)
 
--- Auto-Emote when idle
-local lastPos = nil
+-- Fling Sheriff
 task.spawn(function()
-    while task.wait(1) do
-        if Settings.AutoEmote and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local currentPos = LocalPlayer.Character.HumanoidRootPart.Position
-            if lastPos and (currentPos - lastPos).Magnitude < 0.5 then
-                pcall(function()
-                    for _, remote in ipairs(ReplicatedStorage:GetDescendants()) do
-                        if remote:IsA("RemoteEvent") and string.find(string.lower(remote.Name), "emote") then
-                            remote:FireServer(Settings.SelectedEmote)
-                            break
-                        end
+    while task.wait(0.3) do
+        if Settings.FlingSheriff then
+            local sheriff = GetSheriff()
+            if sheriff then FlingPlayer(sheriff, Settings.FlingPower) end
+        end
+    end
+end)
+
+-- Fling Murderer
+task.spawn(function()
+    while task.wait(0.3) do
+        if Settings.FlingMurderer then
+            local murderer = GetMurderer()
+            if murderer then FlingPlayer(murderer, Settings.FlingPower) end
+        end
+    end
+end)
+
+-- Anti-Grab
+task.spawn(function()
+    while task.wait(0.1) do
+        if Settings.AntiGrab and LocalPlayer.Character then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    if (p.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 5 then
+                        FlingPlayer(p, 5000)
                     end
-                end)
+                end
             end
-            lastPos = currentPos
-        else
-            lastPos = nil
         end
     end
 end)
@@ -869,9 +934,13 @@ task.spawn(function()
     end
 end)
 
-print("✅ Plalette MM2 Ultimate Loaded!")
-print("🔴 Red outline ESP visible through walls")
-print("🎯 Right-click locks onto Murderer")
-print("⌨️ Ctrl to minimize to plalettescripts square")
-print("🎭 Emote selector with idle auto-play")
-print("⚡ All features working & optimized")
+print("╔══════════════════════════════════╗")
+print("║  Plalette MM2 Ultimate Loaded!  ║")
+print("║  🔴 Murderer - Red Outline      ║")
+print("║  🔵 Sheriff  - Blue Outline     ║")
+print("║  🟢 Innocent - Green Outline    ║")
+print("║  🎯 Right-Click Aimbot         ║")
+print("║  💨 Fling System               ║")
+print("║  ⌨️  CTRL to Minimize           ║")
+print("║  ⭐ Credits Tab Added          ║")
+print("╚══════════════════════════════════╝")
