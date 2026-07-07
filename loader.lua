@@ -756,4 +756,147 @@ end)
 
 -- NoClip
 RunService.Stepped:Connect(function()
-    if Settings.NoClip and
+    if Settings.NoClip and LocalPlayer.Character then
+        for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+-- Infinite Jump
+UserInputService.JumpRequest:Connect(function()
+    if Settings.InfiniteJump and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- Anti-AFK
+task.spawn(function()
+    while task.wait(100) do
+        if Settings.AntiAFK then
+            pcall(function()
+                VirtualUser:Button2Down(Vector2.new(0, 0), Camera.CFrame)
+                task.wait(0.1)
+                VirtualUser:Button2Up(Vector2.new(0, 0), Camera.CFrame)
+            end)
+        end
+    end
+end)
+
+-- Teleport to Killer
+task.spawn(function()
+    while task.wait(2) do
+        if Settings.TeleportKiller and LocalPlayer.Character then
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    if player.Backpack:FindFirstChild("Knife") or player.Character:FindFirstChild("Knife") then
+                        LocalPlayer.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame + Vector3.new(0, 5, 0)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Auto-Farm Coins
+task.spawn(function()
+    while task.wait(0.12) do
+        if Settings.AutoFarm and LocalPlayer.Character then
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if obj.Name == "Coin" and obj:IsA("BasePart") then
+                    if (obj.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 200 then
+                        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 0)
+                        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 1)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Auto-Pickup Gun
+task.spawn(function()
+    while task.wait(0.5) do
+        if Settings.AutoPickup and LocalPlayer.Character then
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if obj.Name == "GunDrop" and obj:IsA("BasePart") then
+                    if (obj.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 60 then
+                        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 0)
+                        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, obj, 1)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Emote Unlocker
+task.spawn(function()
+    while task.wait(4) do
+        if Settings.EmoteUnlocker then
+            pcall(function()
+                for _, remote in ipairs(ReplicatedStorage:GetDescendants()) do
+                    if remote:IsA("RemoteEvent") and string.find(string.lower(remote.Name), "emote") then
+                        remote:FireServer(Settings.SelectedEmote, true)
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- Auto-Emote when idle (not moving)
+local lastPosition = nil
+task.spawn(function()
+    while task.wait(1) do
+        if Settings.AutoEmote and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local currentPos = LocalPlayer.Character.HumanoidRootPart.Position
+            if lastPosition and (currentPos - lastPosition).Magnitude < 0.5 then
+                -- Player is idle
+                pcall(function()
+                    for _, remote in ipairs(ReplicatedStorage:GetDescendants()) do
+                        if remote:IsA("RemoteEvent") and (remote.Name == "PlayEmote" or remote.Name == "Emote" or string.find(string.lower(remote.Name), "emote")) then
+                            remote:FireServer(Settings.SelectedEmote)
+                            break
+                        end
+                    end
+                end)
+            end
+            lastPosition = currentPos
+        else
+            lastPosition = nil
+        end
+    end
+end)
+
+-- World
+task.spawn(function()
+    while task.wait(1) do
+        if Settings.Fullbright then
+            Lighting.Brightness = 2
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = false
+        end
+        if Settings.FogRemover then
+            Lighting.FogEnd = 1000000
+            Lighting.FogStart = 0
+        end
+        if Settings.Wireframe then
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if obj:IsA("BasePart") and not obj.Parent:FindFirstChildOfClass("Humanoid") then
+                    obj.Wireframe = true
+                end
+            end
+        end
+    end
+end)
+
+print("✅ Plalette MM2 Script V3 Loaded!")
+print("🎯 Right-click aimbot for Murderer")
+print("🔴 Red skin ESP - no boxes")
+print("⌨️ Ctrl to minimize UI")
+print("🎭 Emote selector with idle auto-play")
+print("⚡ All features optimized & fixed")
