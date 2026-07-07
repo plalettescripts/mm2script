@@ -1,4 +1,4 @@
--- Plalette MM2 Script - Clean Working Version
+-- Plalette MM2 - Working Base + Fixes
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
@@ -9,13 +9,19 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 
--- Settings storage
-local Enabled = {}
+local Settings = {}
+local Connections = {}
+local ESPCache = {}
 
--- Helper functions
+local function ClearESP()
+    for _, d in pairs(ESPCache) do pcall(function() d:Remove() end) end
+    ESPCache = {}
+end
+
 local function GetMurderer()
-    for _, p in pairs(Players:GetPlayers()) do
+    for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
             if (p.Backpack and p.Backpack:FindFirstChild("Knife")) or (p.Character and p.Character:FindFirstChild("Knife")) then
                 return p
@@ -26,7 +32,7 @@ local function GetMurderer()
 end
 
 local function GetSheriff()
-    for _, p in pairs(Players:GetPlayers()) do
+    for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
             if (p.Backpack and p.Backpack:FindFirstChild("Gun")) or (p.Character and p.Character:FindFirstChild("Gun")) then
                 return p
@@ -36,111 +42,389 @@ local function GetSheriff()
     return nil
 end
 
--- GUI Setup
-local GUI = Instance.new("ScreenGui")
-GUI.Name = "PlaletteMM2"
-GUI.Parent = CoreGui
-
-local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 300, 0, 350)
-Main.Position = UDim2.new(0.7, 0, 0.2, 0)
-Main.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-Main.BorderSizePixel = 0
-Main.Draggable = true
-Main.Active = true
-Main.Parent = GUI
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
-
--- Title
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-Title.TextColor3 = Color3.fromRGB(180, 140, 255)
-Title.Text = "Plalette MM2"
-Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 16
-Title.Parent = Main
-
--- Close button
-local Close = Instance.new("TextButton")
-Close.Size = UDim2.new(0, 30, 0, 24)
-Close.Position = UDim2.new(1, -35, 0, 3)
-Close.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-Close.TextColor3 = Color3.fromRGB(255, 255, 255)
-Close.Text = "X"
-Close.Font = Enum.Font.SourceSansBold
-Close.TextSize = 14
-Close.Parent = Main
-Close.MouseButton1Click:Connect(function() GUI:Destroy() end)
-
--- Scrolling frame for toggles
-local Scroll = Instance.new("ScrollingFrame")
-Scroll.Size = UDim2.new(1, -10, 1, -40)
-Scroll.Position = UDim2.new(0, 5, 0, 35)
-Scroll.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-Scroll.BorderSizePixel = 0
-Scroll.ScrollBarThickness = 4
-Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-Scroll.Parent = Main
-
-local List = Instance.new("UIListLayout")
-List.Padding = UDim.new(0, 3)
-List.FillDirection = Enum.FillDirection.Vertical
-List.SortOrder = Enum.SortOrder.LayoutOrder
-List.Parent = Scroll
-
--- Toggle creation function
-local toggleCount = 0
-local function CreateToggle(name, callback)
-    toggleCount = toggleCount + 1
-    Scroll.CanvasSize = UDim2.new(0, 0, 0, toggleCount * 38)
-    
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, -5, 0, 34)
-    Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    Frame.Parent = Scroll
-    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 5)
-    
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(0.6, 0, 1, 0)
-    Label.Position = UDim2.new(0.03, 0, 0, 0)
-    Label.BackgroundTransparency = 1
-    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Label.Text = name .. " : OFF"
-    Label.Font = Enum.Font.SourceSans
-    Label.TextSize = 13
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = Frame
-    
-    local Btn = Instance.new("TextButton")
-    Btn.Size = UDim2.new(0, 44, 0, 22)
-    Btn.Position = UDim2.new(0.92, -44, 0, 6)
-    Btn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-    Btn.Text = ""
-    Btn.Parent = Frame
-    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 11)
-    
-    local on = false
-    Btn.MouseButton1Click:Connect(function()
-        on = not on
-        Label.Text = name .. " : " .. (on and "ON" or "OFF")
-        Btn.BackgroundColor3 = on and Color3.fromRGB(0, 140, 0) or Color3.fromRGB(60, 60, 80)
-        callback(on)
-    end)
+local function FlingPlayer(target)
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = target.Character.HumanoidRootPart
+        local bv = Instance.new("BodyVelocity")
+        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bv.Velocity = Vector3.new(math.random(-3000, 3000), 5000, math.random(-3000, 3000))
+        bv.Parent = hrp
+        game:GetService("Debris"):AddItem(bv, 0.5)
+    end
 end
+
+-- ==================== GUI ====================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PlaletteMM2"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 580, 0, 420)
+MainFrame.Position = UDim2.new(0.5, -290, 0.5, -210)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+
+local Border = Instance.new("Frame")
+Border.Size = UDim2.new(1, 4, 1, 4)
+Border.Position = UDim2.new(0, -2, 0, -2)
+Border.BackgroundColor3 = Color3.fromRGB(100, 50, 255)
+Border.BorderSizePixel = 0
+Border.Parent = MainFrame
+Instance.new("UICorner", Border).CornerRadius = UDim.new(0, 13)
+
+local MiniFrame = Instance.new("Frame")
+MiniFrame.Size = UDim2.new(0, 200, 0, 35)
+MiniFrame.Position = UDim2.new(0.5, -100, 0.02, 0)
+MiniFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+MiniFrame.BorderSizePixel = 0
+MiniFrame.Visible = false
+MiniFrame.Active = true
+MiniFrame.Draggable = true
+MiniFrame.Parent = ScreenGui
+Instance.new("UICorner", MiniFrame).CornerRadius = UDim.new(0, 6)
+
+local MiniLabel = Instance.new("TextLabel")
+MiniLabel.Size = UDim2.new(1, 0, 1, 0)
+MiniLabel.BackgroundTransparency = 1
+MiniLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+MiniLabel.Text = "plalettescripts - Press CTRL"
+MiniLabel.Font = Enum.Font.SourceSansBold
+MiniLabel.TextSize = 13
+MiniLabel.Parent = MiniFrame
+
+task.spawn(function()
+    local hue = 0
+    while ScreenGui.Parent do
+        hue = (hue + 0.005) % 1
+        pcall(function() Border.BackgroundColor3 = Color3.fromHSV(hue, 0.7, 1) end)
+        task.wait(0.03)
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
+        MainFrame.Visible = not MainFrame.Visible
+        MiniFrame.Visible = not MiniFrame.Visible
+    end
+end)
+
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 40)
+TitleBar.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 12)
+
+local TitleText = Instance.new("TextLabel")
+TitleText.Size = UDim2.new(0.6, 0, 1, 0)
+TitleText.Position = UDim2.new(0.02, 0, 0, 0)
+TitleText.BackgroundTransparency = 1
+TitleText.TextColor3 = Color3.fromRGB(180, 130, 255)
+TitleText.Text = "✦ Plalette MM2 ✦"
+TitleText.Font = Enum.Font.SourceSansBold
+TitleText.TextSize = 20
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
+TitleText.Parent = TitleBar
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 35, 0, 28)
+CloseBtn.Position = UDim2.new(1, -42, 0, 6)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.Text = "✕"
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.TextSize = 16
+CloseBtn.Parent = TitleBar
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
+CloseBtn.MouseButton1Click:Connect(function()
+    ClearESP()
+    for _, c in pairs(Connections) do pcall(function() c:Disconnect() end) end
+    ScreenGui:Destroy()
+end)
+
+local TabContainer = Instance.new("Frame")
+TabContainer.Size = UDim2.new(0, 130, 1, -45)
+TabContainer.Position = UDim2.new(0, 5, 0, 43)
+TabContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+TabContainer.BorderSizePixel = 0
+TabContainer.Parent = MainFrame
+Instance.new("UICorner", TabContainer).CornerRadius = UDim.new(0, 8)
+
+local TabList = Instance.new("UIListLayout")
+TabList.Padding = UDim.new(0, 3)
+TabList.FillDirection = Enum.FillDirection.Vertical
+TabList.SortOrder = Enum.SortOrder.LayoutOrder
+TabList.Parent = TabContainer
+
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Size = UDim2.new(1, -145, 1, -50)
+ContentFrame.Position = UDim2.new(0, 138, 0, 43)
+ContentFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+ContentFrame.BorderSizePixel = 0
+ContentFrame.Parent = MainFrame
+Instance.new("UICorner", ContentFrame).CornerRadius = UDim.new(0, 8)
+
+local function CreateTab(name, icon)
+    local TabBtn = Instance.new("TextButton")
+    TabBtn.Size = UDim2.new(1, -8, 0, 32)
+    TabBtn.Position = UDim2.new(0, 4, 0, 0)
+    TabBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    TabBtn.TextColor3 = Color3.fromRGB(180, 180, 200)
+    TabBtn.Text = icon .. " " .. name
+    TabBtn.Font = Enum.Font.SourceSansSemibold
+    TabBtn.TextSize = 13
+    TabBtn.TextXAlignment = Enum.TextXAlignment.Left
+    TabBtn.Parent = TabContainer
+    Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 6)
+
+    local Content = Instance.new("ScrollingFrame")
+    Content.Size = UDim2.new(1, -10, 1, -10)
+    Content.Position = UDim2.new(0, 5, 0, 5)
+    Content.BackgroundTransparency = 1
+    Content.BorderSizePixel = 0
+    Content.ScrollBarThickness = 3
+    Content.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 200)
+    Content.CanvasSize = UDim2.new(0, 0, 0, 800)
+    Content.Visible = false
+    Content.Parent = ContentFrame
+
+    local ContentList = Instance.new("UIListLayout")
+    ContentList.Padding = UDim.new(0, 4)
+    ContentList.FillDirection = Enum.FillDirection.Vertical
+    ContentList.SortOrder = Enum.SortOrder.LayoutOrder
+    ContentList.Parent = Content
+
+    TabBtn.MouseButton1Click:Connect(function()
+        for _, child in ipairs(ContentFrame:GetChildren()) do
+            if child:IsA("ScrollingFrame") then child.Visible = false end
+        end
+        for _, child in ipairs(TabContainer:GetChildren()) do
+            if child:IsA("TextButton") then
+                child.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+                child.TextColor3 = Color3.fromRGB(180, 180, 200)
+            end
+        end
+        Content.Visible = true
+        TabBtn.BackgroundColor3 = Color3.fromRGB(100, 50, 200)
+        TabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end)
+
+    -- Auto-select first tab
+    local existingTabs = {}
+    for _, child in ipairs(ContentFrame:GetChildren()) do
+        if child:IsA("ScrollingFrame") then table.insert(existingTabs, child) end
+    end
+    if #existingTabs == 0 then
+        Content.Visible = true
+        TabBtn.BackgroundColor3 = Color3.fromRGB(100, 50, 200)
+        TabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+
+    local function CreateToggle(name, settingKey)
+        local Frame = Instance.new("Frame")
+        Frame.Size = UDim2.new(1, -5, 0, 36)
+        Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+        Frame.Parent = Content
+        Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+
+        local Label = Instance.new("TextLabel")
+        Label.Size = UDim2.new(0.65, 0, 1, 0)
+        Label.Position = UDim2.new(0.03, 0, 0, 0)
+        Label.BackgroundTransparency = 1
+        Label.TextColor3 = Color3.fromRGB(220, 220, 240)
+        Label.Text = name .. " : OFF"
+        Label.Font = Enum.Font.SourceSansSemibold
+        Label.TextSize = 13
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.Parent = Frame
+
+        local Switch = Instance.new("TextButton")
+        Switch.Size = UDim2.new(0, 48, 0, 24)
+        Switch.Position = UDim2.new(0.92, -48, 0, 6)
+        Switch.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+        Switch.Text = ""
+        Switch.Parent = Frame
+        Instance.new("UICorner", Switch).CornerRadius = UDim.new(0, 12)
+
+        local enabled = false
+        Switch.MouseButton1Click:Connect(function()
+            enabled = not enabled
+            Settings[settingKey] = enabled
+            Label.Text = name .. " : " .. (enabled and "ON" or "OFF")
+            Switch.BackgroundColor3 = enabled and Color3.fromRGB(100, 50, 220) or Color3.fromRGB(60, 60, 75)
+            Label.TextColor3 = enabled and Color3.fromRGB(180, 140, 255) or Color3.fromRGB(220, 220, 240)
+        end)
+    end
+
+    local function CreateSlider(name, settingKey, min, max, default)
+        Settings[settingKey] = default
+        local Frame = Instance.new("Frame")
+        Frame.Size = UDim2.new(1, -5, 0, 50)
+        Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+        Frame.Parent = Content
+        Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+
+        local Label = Instance.new("TextLabel")
+        Label.Size = UDim2.new(1, 0, 0, 20)
+        Label.Position = UDim2.new(0.03, 0, 0, 3)
+        Label.BackgroundTransparency = 1
+        Label.TextColor3 = Color3.fromRGB(220, 220, 240)
+        Label.Text = name .. " : " .. tostring(default)
+        Label.Font = Enum.Font.SourceSans
+        Label.TextSize = 12
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.Parent = Frame
+
+        local Input = Instance.new("TextBox")
+        Input.Size = UDim2.new(0.35, 0, 0, 22)
+        Input.Position = UDim2.new(0.32, 0, 0, 24)
+        Input.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+        Input.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Input.Text = tostring(default)
+        Input.Font = Enum.Font.SourceSans
+        Input.TextSize = 12
+        Input.Parent = Frame
+        Instance.new("UICorner", Input).CornerRadius = UDim.new(0, 4)
+
+        Input.FocusLost:Connect(function()
+            local val = tonumber(Input.Text)
+            if val and val >= min and val <= max then
+                Settings[settingKey] = val
+                Label.Text = name .. " : " .. tostring(val)
+            else
+                Input.Text = tostring(Settings[settingKey])
+            end
+        end)
+    end
+
+    local function CreateDropdown(name, options, settingKey, default)
+        Settings[settingKey] = default or options[1]
+        local Frame = Instance.new("Frame")
+        Frame.Size = UDim2.new(1, -5, 0, 34)
+        Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+        Frame.Parent = Content
+        Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+
+        local Label = Instance.new("TextLabel")
+        Label.Size = UDim2.new(0.35, 0, 1, 0)
+        Label.Position = UDim2.new(0.03, 0, 0, 0)
+        Label.BackgroundTransparency = 1
+        Label.TextColor3 = Color3.fromRGB(220, 220, 240)
+        Label.Text = name .. ":"
+        Label.Font = Enum.Font.SourceSansSemibold
+        Label.TextSize = 12
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.Parent = Frame
+
+        local DropBtn = Instance.new("TextButton")
+        DropBtn.Size = UDim2.new(0.5, 0, 0, 24)
+        DropBtn.Position = UDim2.new(0.47, 0, 0, 5)
+        DropBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+        DropBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        DropBtn.Text = Settings[settingKey]
+        DropBtn.Font = Enum.Font.SourceSans
+        DropBtn.TextSize = 12
+        DropBtn.Parent = Frame
+        Instance.new("UICorner", DropBtn).CornerRadius = UDim.new(0, 4)
+
+        local DropList = Instance.new("Frame")
+        DropList.Size = UDim2.new(0.5, 0, 0, #options * 26)
+        DropList.Position = UDim2.new(0.47, 0, 0, 30)
+        DropList.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+        DropList.BorderSizePixel = 0
+        DropList.Visible = false
+        DropList.Parent = Frame
+        Instance.new("UICorner", DropList).CornerRadius = UDim.new(0, 4)
+
+        local DropLayout = Instance.new("UIListLayout", DropList)
+        DropLayout.FillDirection = Enum.FillDirection.Vertical
+        DropLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+        for _, opt in ipairs(options) do
+            local OptBtn = Instance.new("TextButton")
+            OptBtn.Size = UDim2.new(1, 0, 0, 26)
+            OptBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+            OptBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            OptBtn.Text = opt
+            OptBtn.Font = Enum.Font.SourceSans
+            OptBtn.TextSize = 12
+            OptBtn.Parent = DropList
+            OptBtn.MouseButton1Click:Connect(function()
+                Settings[settingKey] = opt
+                DropBtn.Text = opt
+                DropList.Visible = false
+            end)
+        end
+
+        DropBtn.MouseButton1Click:Connect(function()
+            DropList.Visible = not DropList.Visible
+        end)
+    end
+
+    return {
+        CreateToggle = CreateToggle,
+        CreateSlider = CreateSlider,
+        CreateDropdown = CreateDropdown
+    }
+end
+
+-- Create Tabs
+local CombatTab = CreateTab("Combat", "⚔")
+local ESPTab = CreateTab("ESP", "👁")
+local MoveTab = CreateTab("Move", "🏃")
+local FarmTab = CreateTab("Farm", "💰")
+local FlingTab = CreateTab("Fling", "💨")
+local WorldTab = CreateTab("World", "🌍")
+
+-- Combat
+CombatTab.CreateToggle("Right-Click Aimbot", "Aimbot")
+CombatTab.CreateSlider("Hitbox Size", "HitboxSize", 1, 8, 3)
+CombatTab.CreateToggle("Hitbox Expander", "HitboxExpander")
+CombatTab.CreateToggle("Instant Reload", "InstantReload")
+CombatTab.CreateToggle("Triggerbot", "Triggerbot")
+CombatTab.CreateToggle("God Mode", "GodMode")
+
+-- ESP
+ESPTab.CreateToggle("Player Outlines", "PlayerESP")
+ESPTab.CreateToggle("Coin ESP", "CoinESP")
+ESPTab.CreateToggle("Gun ESP", "GunESP")
+ESPTab.CreateToggle("Tracers", "Tracers")
+ESPTab.CreateToggle("Role Reveal", "RoleReveal")
+
+-- Movement
+MoveTab.CreateSlider("Speed", "SpeedValue", 16, 100, 32)
+MoveTab.CreateToggle("Speed Hack", "SpeedHack")
+MoveTab.CreateToggle("NoClip", "NoClip")
+MoveTab.CreateToggle("Infinite Jump", "InfiniteJump")
+MoveTab.CreateToggle("Anti-AFK", "AntiAFK")
+MoveTab.CreateToggle("Teleport to Killer", "TeleportKiller")
+
+-- Farm
+FarmTab.CreateToggle("Auto-Farm Coins", "AutoFarm")
+FarmTab.CreateToggle("Auto-Pickup Guns", "AutoPickup")
+
+-- Fling
+FlingTab.CreateToggle("Fling Murderer", "FlingMurderer")
+FlingTab.CreateToggle("Fling Sheriff", "FlingSheriff")
+FlingTab.CreateToggle("Anti-Grab", "AntiGrab")
+
+-- World
+WorldTab.CreateToggle("Fullbright", "Fullbright")
+WorldTab.CreateToggle("Fog Remover", "FogRemover")
 
 -- ==================== FEATURES ====================
 
--- Right-Click Aimbot
-CreateToggle("Right-Click Aimbot", function(state)
-    Enabled.RightClickAimbot = state
-end)
-
-local aimbotConnection = nil
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton2 and Enabled.RightClickAimbot then
-        aimbotConnection = RunService.RenderStepped:Connect(function()
+-- Aimbot
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 and Settings.Aimbot then
+        Connections.Aimbot = RunService.RenderStepped:Connect(function()
             local murd = GetMurderer()
             if murd and murd.Character and murd.Character:FindFirstChild("Head") then
                 Camera.CFrame = CFrame.new(Camera.CFrame.Position, murd.Character.Head.Position)
@@ -150,19 +434,31 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        if aimbotConnection then aimbotConnection:Disconnect() aimbotConnection = nil end
+        if Connections.Aimbot then Connections.Aimbot:Disconnect() Connections.Aimbot = nil end
+    end
+end)
+
+-- Hitbox Expander
+task.spawn(function()
+    while task.wait(0.3) do
+        if Settings.HitboxExpander then
+            local s = Settings.HitboxSize or 3
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    p.Character.HumanoidRootPart.Size = Vector3.new(s, s, s)
+                    p.Character.HumanoidRootPart.Transparency = 0.5
+                end
+            end
+        end
     end
 end)
 
 -- Instant Reload
-CreateToggle("Instant Reload", function(state)
-    Enabled.InstantReload = state
-end)
 task.spawn(function()
-    while task.wait(0.15) do
-        if Enabled.InstantReload then
+    while task.wait(0.12) do
+        if Settings.InstantReload then
             pcall(function()
-                for _, t in pairs(LocalPlayer.Backpack:GetChildren()) do
+                for _, t in ipairs(LocalPlayer.Backpack:GetChildren()) do
                     if t:IsA("Tool") and t:FindFirstChild("Ammo") then t.Ammo.Value = 99 end
                 end
                 local ct = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
@@ -173,12 +469,9 @@ task.spawn(function()
 end)
 
 -- Triggerbot
-CreateToggle("Triggerbot", function(state)
-    Enabled.Triggerbot = state
-end)
 task.spawn(function()
-    while task.wait(0.08) do
-        if Enabled.Triggerbot and LocalPlayer.Character then
+    while task.wait(0.06) do
+        if Settings.Triggerbot and LocalPlayer.Character then
             pcall(function()
                 local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
                 if tool and tool:FindFirstChild("Shoot") then
@@ -194,67 +487,40 @@ task.spawn(function()
 end)
 
 -- God Mode
-CreateToggle("God Mode", function(state)
-    Enabled.GodMode = state
-end)
 task.spawn(function()
     while task.wait(0.2) do
-        if Enabled.GodMode and LocalPlayer.Character then
+        if Settings.GodMode and LocalPlayer.Character then
             local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
             if hum then hum.Health = hum.MaxHealth end
         end
     end
 end)
 
--- Hitbox Expander
-CreateToggle("Hitbox Expander", function(state)
-    Enabled.Hitbox = state
-end)
-task.spawn(function()
-    while task.wait(0.3) do
-        if Enabled.Hitbox then
-            for _, p in pairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    p.Character.HumanoidRootPart.Size = Vector3.new(4, 4, 4)
-                    p.Character.HumanoidRootPart.Transparency = 0.5
-                end
-            end
-        end
-    end
-end)
-
--- Player ESP (Colored outlines)
-CreateToggle("Player ESP (Outlines)", function(state)
-    Enabled.PlayerESP = state
-end)
+-- Player ESP
 task.spawn(function()
     while task.wait(0.5) do
-        if Enabled.PlayerESP then
-            for _, p in pairs(Players:GetPlayers()) do
+        if Settings.PlayerESP then
+            for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character then
-                    local hl = p.Character:FindFirstChild("ESP_Highlight")
+                    local hl = p.Character:FindFirstChild("PlaletteESP")
                     if not hl then
                         hl = Instance.new("Highlight")
-                        hl.Name = "ESP_Highlight"
+                        hl.Name = "PlaletteESP"
                         hl.FillTransparency = 1
                         hl.OutlineTransparency = 0
                         hl.Parent = p.Character
                     end
                     local isMurderer = (p.Backpack and p.Backpack:FindFirstChild("Knife")) or (p.Character and p.Character:FindFirstChild("Knife"))
                     local isSheriff = (p.Backpack and p.Backpack:FindFirstChild("Gun")) or (p.Character and p.Character:FindFirstChild("Gun"))
-                    if isMurderer then
-                        hl.OutlineColor = Color3.fromRGB(255, 0, 0)
-                    elseif isSheriff then
-                        hl.OutlineColor = Color3.fromRGB(0, 100, 255)
-                    else
-                        hl.OutlineColor = Color3.fromRGB(0, 255, 0)
-                    end
+                    if isMurderer then hl.OutlineColor = Color3.fromRGB(255, 0, 0)
+                    elseif isSheriff then hl.OutlineColor = Color3.fromRGB(0, 100, 255)
+                    else hl.OutlineColor = Color3.fromRGB(0, 255, 0) end
                 end
             end
         else
-            for _, p in pairs(Players:GetPlayers()) do
-                if p.Character and p.Character:FindFirstChild("ESP_Highlight") then
-                    p.Character.ESP_Highlight:Destroy()
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.Character and p.Character:FindFirstChild("PlaletteESP") then
+                    p.Character.PlaletteESP:Destroy()
                 end
             end
         end
@@ -262,43 +528,35 @@ task.spawn(function()
 end)
 
 -- Coin ESP
-CreateToggle("Coin ESP", function(state)
-    Enabled.CoinESP = state
-end)
 task.spawn(function()
-    while task.wait(0.1) do
-        if Enabled.CoinESP then
-            local draws = {}
-            for _, obj in pairs(Workspace:GetDescendants()) do
+    while task.wait(0.08) do
+        if Settings.CoinESP then
+            ClearESP()
+            for _, obj in ipairs(Workspace:GetDescendants()) do
                 if obj.Name == "Coin" and obj:IsA("BasePart") then
                     local pos, onScreen = Camera:WorldToViewportPoint(obj.Position)
                     if onScreen then
                         local d = Drawing.new("Text")
                         d.Text = "💰"
                         d.Color = Color3.fromRGB(255, 215, 0)
-                        d.Size = 18
+                        d.Size = 17
                         d.Position = Vector2.new(pos.X, pos.Y)
                         d.Center = true
                         d.Visible = true
-                        table.insert(draws, d)
+                        table.insert(ESPCache, d)
                     end
                 end
             end
-            task.wait(0.05)
-            for _, d in pairs(draws) do pcall(function() d:Remove() end) end
         end
     end
 end)
 
 -- Gun ESP
-CreateToggle("Gun ESP", function(state)
-    Enabled.GunESP = state
-end)
 task.spawn(function()
-    while task.wait(0.1) do
-        if Enabled.GunESP then
-            local draws = {}
-            for _, obj in pairs(Workspace:GetDescendants()) do
+    while task.wait(0.08) do
+        if Settings.GunESP then
+            ClearESP()
+            for _, obj in ipairs(Workspace:GetDescendants()) do
                 if obj.Name == "GunDrop" and obj:IsA("BasePart") then
                     local pos, onScreen = Camera:WorldToViewportPoint(obj.Position)
                     if onScreen then
@@ -309,52 +567,42 @@ task.spawn(function()
                         d.Position = Vector2.new(pos.X, pos.Y)
                         d.Center = true
                         d.Visible = true
-                        table.insert(draws, d)
+                        table.insert(ESPCache, d)
                     end
                 end
             end
-            task.wait(0.05)
-            for _, d in pairs(draws) do pcall(function() d:Remove() end) end
         end
     end
 end)
 
 -- Tracers
-CreateToggle("Tracers", function(state)
-    Enabled.Tracers = state
-end)
 task.spawn(function()
-    while task.wait(0.03) do
-        if Enabled.Tracers then
-            local draws = {}
-            for _, p in pairs(Players:GetPlayers()) do
+    while task.wait(0.02) do
+        if Settings.Tracers then
+            ClearESP()
+            for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     local pos, onScreen = Camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
                     if onScreen then
                         local l = Drawing.new("Line")
                         l.Color = Color3.fromRGB(255, 255, 255)
-                        l.Thickness = 1
+                        l.Thickness = 0.8
                         l.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
                         l.To = Vector2.new(pos.X, pos.Y)
                         l.Visible = true
-                        table.insert(draws, l)
+                        table.insert(ESPCache, l)
                     end
                 end
             end
-            task.wait(0.02)
-            for _, d in pairs(draws) do pcall(function() d:Remove() end) end
         end
     end
 end)
 
 -- Role Reveal
-CreateToggle("Role Reveal", function(state)
-    Enabled.RoleReveal = state
-end)
 task.spawn(function()
-    while task.wait(1) do
-        if Enabled.RoleReveal then
-            for _, p in pairs(Players:GetPlayers()) do
+    while task.wait(0.8) do
+        if Settings.RoleReveal then
+            for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
                     local role, color = "Innocent", Color3.fromRGB(0, 255, 0)
                     if (p.Backpack and p.Backpack:FindFirstChild("Knife")) or (p.Character and p.Character:FindFirstChild("Knife")) then
@@ -391,46 +639,34 @@ task.spawn(function()
 end)
 
 -- Speed Hack
-CreateToggle("Speed Hack", function(state)
-    Enabled.SpeedHack = state
-end)
 RunService.Stepped:Connect(function()
-    if Enabled.SpeedHack and LocalPlayer.Character then
+    if Settings.SpeedHack and LocalPlayer.Character then
         local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.WalkSpeed = 32 end
+        if hum then hum.WalkSpeed = Settings.SpeedValue or 32 end
     end
 end)
 
 -- NoClip
-CreateToggle("NoClip", function(state)
-    Enabled.NoClip = state
-end)
 RunService.Stepped:Connect(function()
-    if Enabled.NoClip and LocalPlayer.Character then
-        for _, p in pairs(LocalPlayer.Character:GetDescendants()) do
+    if Settings.NoClip and LocalPlayer.Character then
+        for _, p in ipairs(LocalPlayer.Character:GetDescendants()) do
             if p:IsA("BasePart") then p.CanCollide = false end
         end
     end
 end)
 
 -- Infinite Jump
-CreateToggle("Infinite Jump", function(state)
-    Enabled.InfJump = state
-end)
 UserInputService.JumpRequest:Connect(function()
-    if Enabled.InfJump and LocalPlayer.Character then
+    if Settings.InfiniteJump and LocalPlayer.Character then
         local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
         if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
     end
 end)
 
 -- Anti-AFK
-CreateToggle("Anti-AFK", function(state)
-    Enabled.AntiAFK = state
-end)
 task.spawn(function()
     while task.wait(100) do
-        if Enabled.AntiAFK then
+        if Settings.AntiAFK then
             pcall(function()
                 VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, nil)
                 task.wait(0.1)
@@ -441,12 +677,9 @@ task.spawn(function()
 end)
 
 -- Teleport to Killer
-CreateToggle("Teleport to Killer", function(state)
-    Enabled.TeleKiller = state
-end)
 task.spawn(function()
     while task.wait(2) do
-        if Enabled.TeleKiller and LocalPlayer.Character then
+        if Settings.TeleportKiller and LocalPlayer.Character then
             local m = GetMurderer()
             if m and m.Character and m.Character:FindFirstChild("HumanoidRootPart") then
                 local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -457,15 +690,12 @@ task.spawn(function()
 end)
 
 -- Auto-Farm Coins
-CreateToggle("Auto-Farm Coins", function(state)
-    Enabled.AutoFarm = state
-end)
 task.spawn(function()
     while task.wait(0.1) do
-        if Enabled.AutoFarm and LocalPlayer.Character then
+        if Settings.AutoFarm and LocalPlayer.Character then
             local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if hrp then
-                for _, obj in pairs(Workspace:GetDescendants()) do
+                for _, obj in ipairs(Workspace:GetDescendants()) do
                     if obj.Name == "Coin" and obj:IsA("BasePart") then
                         if (obj.Position - hrp.Position).Magnitude < 200 then
                             firetouchinterest(hrp, obj, 0)
@@ -479,15 +709,12 @@ task.spawn(function()
 end)
 
 -- Auto-Pickup Guns
-CreateToggle("Auto-Pickup Guns", function(state)
-    Enabled.AutoPickup = state
-end)
 task.spawn(function()
     while task.wait(0.5) do
-        if Enabled.AutoPickup and LocalPlayer.Character then
+        if Settings.AutoPickup and LocalPlayer.Character then
             local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if hrp then
-                for _, obj in pairs(Workspace:GetDescendants()) do
+                for _, obj in ipairs(Workspace:GetDescendants()) do
                     if obj.Name == "GunDrop" and obj:IsA("BasePart") then
                         if (obj.Position - hrp.Position).Magnitude < 80 then
                             firetouchinterest(hrp, obj, 0)
@@ -500,49 +727,58 @@ task.spawn(function()
     end
 end)
 
--- Fling Selected Player
-local flingTarget = nil
-CreateToggle("Fling Murderer", function(state)
-    Enabled.FlingMurderer = state
-end)
-CreateToggle("Fling Sheriff", function(state)
-    Enabled.FlingSheriff = state
-end)
-
+-- Fling Murderer
 task.spawn(function()
-    while task.wait(0.3) do
-        local target = nil
-        if Enabled.FlingMurderer then target = GetMurderer() end
-        if not target and Enabled.FlingSheriff then target = GetSheriff() end
-        
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            local bv = Instance.new("BodyVelocity")
-            bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-            bv.Velocity = Vector3.new(math.random(-2000, 2000), 3000, math.random(-2000, 2000))
-            bv.Parent = target.Character.HumanoidRootPart
-            task.delay(0.5, function() pcall(function() bv:Destroy() end) end)
+    while task.wait(0.25) do
+        if Settings.FlingMurderer then
+            local m = GetMurderer()
+            if m then FlingPlayer(m) end
         end
     end
 end)
 
--- Fullbright
-CreateToggle("Fullbright", function(state)
-    Enabled.Fullbright = state
-    if state then
-        Lighting.Brightness = 2
-        Lighting.ClockTime = 14
-        Lighting.FogEnd = 100000
-        Lighting.GlobalShadows = false
+-- Fling Sheriff
+task.spawn(function()
+    while task.wait(0.25) do
+        if Settings.FlingSheriff then
+            local s = GetSheriff()
+            if s then FlingPlayer(s) end
+        end
     end
 end)
 
--- Fog Remover
-CreateToggle("Fog Remover", function(state)
-    Enabled.FogRemover = state
-    if state then
-        Lighting.FogEnd = 1000000
-        Lighting.FogStart = 0
+-- Anti-Grab
+task.spawn(function()
+    while task.wait(0.1) do
+        if Settings.AntiGrab and LocalPlayer.Character then
+            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        if (p.Character.HumanoidRootPart.Position - hrp.Position).Magnitude < 5 then
+                            FlingPlayer(p)
+                        end
+                    end
+                end
+            end
+        end
     end
 end)
 
-print("Plalette MM2 Script Loaded - All features active")
+-- Fullbright & Fog
+task.spawn(function()
+    while task.wait(1) do
+        if Settings.Fullbright then
+            Lighting.Brightness = 2
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = false
+        end
+        if Settings.FogRemover then
+            Lighting.FogEnd = 1000000
+            Lighting.FogStart = 0
+        end
+    end
+end)
+
+print("✅ Plalette MM2 Loaded!")
